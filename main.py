@@ -4,6 +4,7 @@ from pathlib import Path
 import numpy as np
 import os
 from sys import argv
+from argparse import ArgumentParser
 
 from wfl.configset import ConfigSet, OutputSpec
 from wfl.calculators.castep import Castep
@@ -13,8 +14,10 @@ from expyre.resources import Resources
 from wfl.autoparallelize import AutoparaInfo
 
 BASE_WORKDIR = Path('/work/e89/e89/twarford/.dft_runs')
-
-_, XYZ_PATH, SLICE = argv
+parser = ArgumentParser(description='Run DFT calculations using CASTEP')
+parser.add_argument('xyz_path', help='Path to xyz file')
+parser.add_argument('--slice', help='Slice of configurations to run (e.g. ":" or "0:10")', default=':', required=False)
+parser.add_argument('--generate_only', help='Only generate default param files.")', default=False, type=bool, required=False)
 
 def submit(config_set,
            output_spec,
@@ -41,7 +44,7 @@ def submit(config_set,
         inputs = config_set, 
         outputs = output_spec, 
         calculator = compute, 
-        properties=["energy","forces","stress", 'magmoms'],
+        properties=["energy","forces","stress",],
         output_prefix = f"{output_prefix}_", 
         autopara_info = AutoparaInfo(
             remote_info=remote_info,
@@ -51,7 +54,7 @@ def submit(config_set,
         wait_for_results=wfl_params['wait_for_results'],
     )
 
-def run_dft(xyz_path, slice):
+def run_dft(xyz_path, slice, generate_only):
     # io
     xyz_path = Path(xyz_path)
     print(f'Running DFT on {xyz_path}[{slice}]')
@@ -84,7 +87,8 @@ def run_dft(xyz_path, slice):
         json.dump(castep_params, f, indent=4)
     with open(output_dir/'params_wfl.json', 'w') as f:
         json.dump(wfl_params, f, indent=4)
-    submit(config_set, output_spec, castep_params, wfl_params)
+    if not generate_only:
+        submit(config_set, output_spec, castep_params, wfl_params)
 
 def get_default_castep_params(configs):
     if isinstance(configs, list):
@@ -154,61 +158,5 @@ def get_output_prefix(castep_params):
     return output_prefix
 
 if __name__ == '__main__':
-    run_dft(XYZ_PATH, SLICE)
-
-
-# def submit_castep_calculation(work_dir, config_set, castep_params_file, xc_functional, wait_for_results, overwrite):
-#     castep_params = castep_params_file.copy()
-#     if xc_functional == 'GGA': # Remove U from GGA calculations (if present)
-#         castep_params.pop('hubbard_u', None)
-
-#     output_spec = OutputSpec(work_dir/f'{xc_functional}.xyz', overwrite=overwrite)
-#     num_kpoints = 1
-#     for n in castep_params['kpoint_mp_grid']:
-#         num_kpoints *= n
-#     num_atoms = len(config_set.items[0]) 
-#     num_nodes = min(math.ceil(num_kpoints / 128), num_atoms)
-#     num_inputs_per_queued_job = 1
-#     max_time = ("20m" if ((num_nodes > 1) or (num_atoms < 10)) and castep_params['task']=='singlepoint' else "24h") # Some relaxations (V) fail with 20m
-#     partition = "short" if max_time == "20m" else "standard"
-#     if 'Pd/slabs' in str(work_dir):
-#         partition = "highmem"
-#         num_nodes = 2 # Pd seems to use more than the predicted 3.2GB per process on 1 node!
-#     print(f'{max_time=}', f'{partition=}')
-
-#     resources = Resources(
-#         max_time = max_time,
-#         num_nodes= num_nodes,
-#         partitions = partition,
-#         )
-
-#     remote_info = RemoteInfo(
-#         # ignore_failed_jobs=True,
-#         sys_name = "highmem" if partition == 'highmem' else "local", 
-#         job_name = 'castep', 
-#         resources = resources, 
-#         num_inputs_per_queued_job=num_inputs_per_queued_job,
-#         input_files=['/work/e89/e89/twarford/castep_keywords.json'],
-#         pre_cmds=[
-#         "module load craype-x86-genoa",
-#         "module load cray-fftw/3.3.10.3",
-#         "source /work/e89/e89/jj569/Venv/bin/activate",
-#         "module load load-epcc-module",
-#         "module load epcc-setup-env",
-#         "module load castep/23.11"]) 
-
-#     compute = (Castep, [], castep_params)
-
-#     generic.calculate(
-#         inputs = config_set, 
-#         outputs = output_spec, 
-#         calculator = compute, 
-#         properties=["energy","forces","stress"],
-#         output_prefix = f"{xc_functional}_", 
-#         autopara_info = AutoparaInfo(
-#             remote_info=remote_info,
-#             num_python_subprocesses = 1,
-#             num_inputs_per_python_subprocess=1,
-#         ),
-#         wait_for_results=wait_for_results,
-#     )
+    args = parser.parse_args()
+    run_dft(args.xyz_path, args.slice, args.generate_only)

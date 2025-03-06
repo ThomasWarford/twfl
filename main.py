@@ -36,7 +36,8 @@ def submit(config_set,
             resources = resources, 
             num_inputs_per_queued_job=1,
             input_files=['/work/e89/e89/twarford/castep_keywords.json'],
-            pre_cmds=["module load castep/23.11"]) 
+            pre_cmds=["module load castep/23.11",
+                      "source ~/.bashrc",]) 
     
     compute = (Castep, [], castep_params)
     output_prefix = wfl_params['output_prefix']
@@ -134,11 +135,9 @@ def get_kpoints(atoms, spacing):
     return tuple(int(n) for n in k_grid)
 
 def get_default_wfl_params(configs, castep_params):
-    if isinstance(configs, list):
-        config = configs[0]
-    else:
-        config = configs
-    num_atoms = len(config)
+    if not isinstance(configs, list):
+        configs = [configs]
+    min_num_atoms = min(len(conf) for conf in configs)
     wfl_params = {}
     wfl_params['output_prefix'] = get_output_prefix(castep_params)
     wfl_params['wait_for_results'] = True
@@ -149,7 +148,7 @@ def get_default_wfl_params(configs, castep_params):
     num_kpoints = 1
     for n in castep_params['kpoint_mp_grid']:
         num_kpoints *= n
-    wfl_params['num_nodes'] = max( min(num_kpoints // 128, num_atoms), 1)
+    wfl_params['num_nodes'] = max( min(num_kpoints // 128, min_num_atoms//2), 1)
     return wfl_params
 
 def get_output_prefix(castep_params):

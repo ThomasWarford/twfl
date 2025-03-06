@@ -137,18 +137,18 @@ def get_kpoints(atoms, spacing):
 def get_default_wfl_params(configs, castep_params):
     if not isinstance(configs, list):
         configs = [configs]
-    min_num_atoms = min(len(conf) for conf in configs)
+    num_atoms = min(len(conf) for conf in configs)
     wfl_params = {}
     wfl_params['output_prefix'] = get_output_prefix(castep_params)
     wfl_params['wait_for_results'] = True
     wfl_params['overwrite'] = False
     wfl_params['ignore_failed_jobs'] = True
-    wfl_params['max_time'] = "20m" if (num_atoms < 10) and (castep_params['task']=='singlepoint') else "24h"
+    wfl_params['max_time'] = "20m" if (max(num_atoms) < 10) and (castep_params['task']=='singlepoint') else "24h"
     wfl_params['partition'] = "short" if wfl_params['max_time'] == "20m" else "standard"
     num_kpoints = 1
     for n in castep_params['kpoint_mp_grid']:
         num_kpoints *= n
-    wfl_params['num_nodes'] = max( min(num_kpoints // 128, min_num_atoms//2), 1)
+    wfl_params['num_nodes'] = max( min(num_kpoints // 128, min(num_atoms)//2), 1)
     return wfl_params
 
 def get_output_prefix(castep_params):
